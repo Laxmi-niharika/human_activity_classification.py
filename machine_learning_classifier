@@ -1,0 +1,158 @@
+import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import joblib
+import os
+from sklearn.utils import resample
+from sklearn.model_selection import train_test_split
+from imblearn.over_sampling import SMOTE
+from sklearn.ensemble import GradientBoostingClassifier
+from xgboost import XGBClassifier
+from sklearn.metrics import accuracy_score,confusion_matrix,classification_report,precision_score,recall_score,f1_score
+from sklearn.preprocessing import LabelEncoder
+import warnings
+warnings.filterwarnings('ignore')
+df = pd.read_csv('dataset.csv')
+df.head()
+df.shape
+df['activity'].unique()
+df.describe()
+df.info()
+df.isnull().sum()
+# Create the count plot
+plt.figure(figsize=(10, 6))
+sns.countplot(data=df, x='activity')
+plt.title('Count Plot for Activity')
+plt.xlabel('Activity')
+plt.ylabel('Count')
+plt.show()
+# Resample the DataFrame to have 10,000 samples
+df_resampled = resample(df, replace=True, n_samples=10000, random_state=42)
+# Create the count plot
+plt.figure(figsize=(10, 6))
+sns.countplot(data=df_resampled, x='activity')
+plt.title('Count Plot for Activity')
+plt.xlabel('Activity')
+plt.ylabel('Count')
+plt.show()
+label_encoder = LabelEncoder()
+# Fit and transform the activity column
+df_resampled['activity'] = label_encoder.fit_transform(df_resampled['activity'])
+df_resampled.head()
+df_resampled.shape
+df_resampled['activity'].unique()
+# Specifying dependent and independent variables
+# Separate features and target
+X = df_resampled.drop('activity', axis=1)
+y = df_resampled['activity']
+print("Length of X:", len(X))
+print("Length of y:", len(y))
+X
+y
+# Data Splitting
+X_train,X_test,y_train,y_test= train_test_split(X,y,test_size=0.2,random_state=77 )
+smote = SMOTE(sampling_strategy='auto', random_state=42)
+X_train ,y_train = smote.fit_resample(X_train,y_train)
+X_train.shape
+y_train.shape
+labels = ['bending', 'cycling', 'sitting', 'standing', 'walking']  # The corresponding names for the labels
+#defining global variables to store accuracy and other metrics
+precision = []
+recall = []
+fscore = []
+accuracy = []
+#function to calculate various metrics such as accuracy, precision etc
+def calculateMetrics(algorithm, testY,predict):
+    testY = testY.astype('int')
+    predict = predict.astype('int')
+    p = precision_score(testY, predict,average='macro') * 100
+    r = recall_score(testY, predict,average='macro') * 100
+    f = f1_score(testY, predict,average='macro') * 100
+    a = accuracy_score(testY,predict)*100 
+
+    accuracy.append(a)
+    precision.append(p)
+    recall.append(r)
+    
+    fscore.append(f)
+    print(algorithm+' Accuracy    : '+str(a))
+    print(algorithm+' Precision   : '+str(p))
+    print(algorithm+' Recall      : '+str(r))
+    print(algorithm+' FSCORE      : '+str(f))
+    report=classification_report(predict, testY,target_names=labels)
+    print('\n',algorithm+" classification report\n",report)
+    conf_matrix = confusion_matrix(testY, predict) 
+    plt.figure(figsize =(5, 5)) 
+    ax = sns.heatmap(conf_matrix, xticklabels = labels, yticklabels = labels, annot = True, cmap="Blues" ,fmt ="g");
+    ax.set_ylim([0,len(labels)])
+    plt.title(algorithm+" Confusion matrix") 
+    plt.ylabel('True class') 
+    plt.xlabel('Predicted class') 
+    plt.show()
+    #GradientBoostingClassifier
+    if os.path.exists('model/GradientBoostingClassifier.pkl'):
+    # Load the trained model from the file
+    gbb = joblib.load('model/GradientBoostingClassifier.pkl')
+    print("Model loaded successfully.")
+    predict = gbb.predict(X_test)
+    calculateMetrics("GradientBoostingClassifier", predict, y_test)
+else:
+    # Train the model (assuming X_train and y_train are defined)
+    gbb = GradientBoostingClassifier()
+    gbb.fit(X_train, y_train)
+    # Save the trained model to a file
+    joblib.dump(gbb, 'model/GradientBoostingClassifier.pkl')
+    print("Model saved successfully.")
+    predict = gbb.predict(X_test)
+    calculateMetrics("GradientBoostingClassifier", predict, y_test)
+    #XGBClassifier
+    if os.path.exists('model/XGBClassifier.pkl'):
+    # Load the trained model from the file
+    xgbc = joblib.load('model/XGBClassifier.pkl')
+    print("Model loaded successfully.")
+    predict = xgbc.predict(X_test)
+    calculateMetrics("XGBClassifier", predict, y_test)
+else:
+    # Train the model (assuming X_train and y_train are defined)
+    xgbc = XGBClassifier()
+    xgbc.fit(X_train, y_train)
+    # Save the trained model to a file
+    joblib.dump(xgbc, 'model/XGBClassifier.pkl')
+    print("Model saved successfully.")
+    predict = xgbc.predict(X_test)
+    calculateMetrics("XGBClassifier", predict, y_test)
+test = pd.read_csv('test.csv')
+#dataset = dataset.fillna(0)
+object_cols1 = test.select_dtypes(include=['object']).columns
+test[object_cols1] = test[object_cols1].fillna('Unknown')
+
+# Apply Label Encoding to each object column
+label_encoders = {}
+for col in object_cols1:
+    # Fill null values with a placeholder, e.g., 'Unknown'
+#    dataset[col] = dataset[col].fillna('Unknown')
+    test = test.fillna(0)
+    # Initialize and fit the LabelEncoder
+    le = LabelEncoder()
+    test[col] = le.fit_transform(test[col])
+    
+    # Store the label encoder for future use
+    label_encoders[col] = le
+
+# Display the transformed dataset
+print("Transformed Dataset:")
+print(test)
+# Define your labels
+labels = ['bending', 'cycling', 'sitting', 'standing', 'walking']
+
+# Make predictions
+predict = xgbc.predict(test)
+
+# Loop through each prediction and print the corresponding row for the first 10 rows
+for i, p in enumerate(predict[:10]):  # Slice to limit to first 10 rows
+    label = labels[p]  # Map the prediction to the label
+    print(f"Row {i}: {test.iloc[i]}")  # Print the row content
+    print(f"Row {i}: ************************************** Prediction: {label}")
+test['predict']=predict
+test
